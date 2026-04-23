@@ -1,29 +1,38 @@
-use axum::{Json, Router, http::StatusCode, routing::post};
+use axum::{
+    Json, Router,
+    extract::Query,
+    http::StatusCode,
+    response::{IntoResponse, Redirect},
+    routing::get,
+};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct User {
     id: String,
+    github_user_id: String,
     username: String,
+    created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
-struct CreateUserInput {
-    username: String,
-}
-
-fn user_create(username: String) -> User {
+fn user_create(github_user_id: String, username: String) -> User {
     User {
-        id: "1".to_string(),
+        id: Uuid::new_v4().to_string(),
+        github_user_id,
         username,
+        created_at: Utc::now(),
     }
 }
 
 async fn github_login() -> impl IntoResponse {
+    let client_id = std::env::var("GITHUB_CLIENT_ID").unwrap();
     let url = format!(
         "https://github.com/login/oauth/authorize?client_id={}&scope=user",
-        std::env::var("GITHUB_CLIENT_ID").unwrap()
+        client_id
     );
+    Redirect::to(&url)
 }
 
 #[derive(Deserialize)]
@@ -31,20 +40,63 @@ struct CallbackQuery {
     code: String,
 }
 
-async fn github_callback(Query(query): Query<CallbackQUery>) -> impl IntoResponse {
-    let token = exchange_code_for_token(&query.code).await;
-    let github_user = fetch_github_user(&token).await;
-    Json(json!({ "token": "..." }))
+#[derive(Deserialize)]
+struct GitHubTokenResponse {
+    access_token: String,
 }
 
-async fn create_user_handler(Json(input): Json<CreateUserInput>) -> (StatusCode, Json<User>) {
-    let user = user_create(input.username);
+#[derive(Deserialize)]
+struct GitHubUser {
+    id: u64,
+    login: String,
+}
+
+async fn exchange_code_for_token(code: &str) -> String {
+    let client = reqwest::Client::new();
+    let res: GitHubTokenResponse = client
+        .post("https://github.com/login/oauth/access_token")
+        .header("Accept", "application/json")
+        .json(&serde_json::json!({
+            "client_id": std::env::var("GITHUB_CLIENT_ID").unwrap(),
+            "client_secret": std::env::var("GITHUB_CLIENT_SECRET").unwrap(),
+            "code": code,
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    res.access_token
+}
+
+async fn fetch_github_user(token: &str) -> GitHubUser {
+    let client = reqwest::Client::new();
+    client
+        .get("https://api.github.com/user")
+        .header("Authorization", format!("Bearer {}", token))
+        .header("User-Agent", "rs-headless-backend")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap()
+}
+
+async fn github_callback(Query(query): Query<CallbackQuery>) -> impl IntoResponse {
+    let token = exchange_code_for_token(&query.code).await;
+    let github_user = fetch_github_user(&token).await;
+    let user = user_create(github_user.id.to_string(), github_user.login);
     (StatusCode::CREATED, Json(user))
 }
 
 fn create_app() -> Router {
-    Router::new().route("/users", post(create_user_handler))
+    Router::new()
+        .route("/auth/github", get(github_login))
+        .route("/auth/github/callback", get(github_callback))
 }
+
 #[tokio::main]
 async fn main() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -53,8 +105,10 @@ async fn main() {
 
 #[test]
 fn test_user_create() {
-    let user = user_create("Alice".to_string());
+    let user = user_create("12345".to_string(), "Alice".to_string());
     assert_eq!(user.username, "Alice");
+    assert_eq!(user.github_user_id, "12345");
+    assert!(!user.id.is_empty())
 }
 
 // This test is using oneshot.
