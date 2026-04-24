@@ -1,0 +1,23 @@
+{
+  "name": "rs-headless-backend",
+  "dockerComposeFile": ["docker-compose.yml", "docker-compose.dev.yml"],
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "forwardPorts": [3000, 5432],
+  "mounts": [
+    "source=${localEnv:SSH_AUTH_SOCK},target=/run/host-services/ssh-auth.sock,type=bind"
+  ],
+  "remoteEnv": {
+    "SSH_AUTH_SOCK": "/run/host-services/ssh-auth.sock"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["rust-lang.rust-analyzer"]
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/nix:1": {}
+  },
+  "postCreateCommand": "nix develop",
+  "postStartCommand": "nix develop"
+}

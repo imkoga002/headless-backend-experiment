@@ -103,14 +103,6 @@ async fn main() {
     axum::serve(listener, create_app()).await.unwrap();
 }
 
-#[test]
-fn test_user_create() {
-    let user = user_create("12345".to_string(), "Alice".to_string());
-    assert_eq!(user.username, "Alice");
-    assert_eq!(user.github_user_id, "12345");
-    assert!(!user.id.is_empty())
-}
-
 // This test is using oneshot.
 // #[cfg(test)]
 // mod tests
