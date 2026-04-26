@@ -16,8 +16,9 @@
     }
   },
   "features": {
-    "ghcr.io/devcontainers/features/nix:1": {}
+    "ghcr.io/devcontainers/features/nix:1": {
+      "extraNixConfig": "extra-experimental-features = nix-command flakes"
+    }
   },
-  "postCreateCommand": "nix develop",
-  "postStartCommand": "nix develop"
+  "postCreateCommand": "nix profile install nixpkgs#openssh nixpkgs#direnv nixpkgs#zsh nixpkgs#zoxide nixpkgs#oh-my-zsh && mkdir -p ~/.ssh ~/.config ~/.cargo && touch ~/.cargo/env && ln -sf ~/.nix-profile/share/oh-my-zsh ~/.oh-my-zsh && ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null && (git clone git@github.com:imkoga002/dotfiles ~/dotfiles && chmod +x ~/dotfiles/install.sh && ~/dotfiles/install.sh || true) && echo 'eval \"$(direnv hook bash)\"' >> ~/.bashrc && grep -q 'direnv hook zsh' ~/.zshrc 2>/dev/null || echo 'eval \"$(direnv hook zsh)\"' >> ~/.zshrc && git config --global --add safe.directory /workspace && direnv allow /workspace"
 }
